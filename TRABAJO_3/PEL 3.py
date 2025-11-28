@@ -98,9 +98,9 @@ alpha = 0.15
 T_D0 = 294 
 
 # GASES
-gases = ["H2", "He", "Aire", "CO2", "Ar", "Kr"]
-R_gases = ([4124, 2076.9, 287, 188.9, 208.1, 99.21]) #sacados del manual del overleaf
-gamma_gases = ([1.41, 1.66, 1.40, 1.30, 1.67, 1.67]) #nist chemistry webbook
+gases = ["H2", "He", "Aire", "CO2", "Ar"]
+R_gases = ([4124, 2076.9, 287, 188.9, 208.1]) #sacados del manual del overleaf
+gamma_gases = ([1.41, 1.66, 1.40, 1.30, 1.67]) #nist chemistry webbook
 
 # MATERIALES
 materiales = ["Al7075T6", "Acero", "Titanio6AL4V"]
@@ -110,7 +110,7 @@ sigma_u_materiales = [0.45e9, 0.54e9, 1e9]
 P_D_min = (1 + alpha) * P_tonk
 
 P_D_max = 28e5 #cambiar
-paso = 6
+paso = 100
 P_D_vector = linspace(13e5 , P_D_max, paso) 
 
 V_D_z = zeros((len(gases), len(materiales), paso)) # Volúmen del depósito
@@ -196,3 +196,44 @@ df = pd.DataFrame(rows)
 df.to_csv("tabla_valores.csv", index=False)
 
 print("\nCSV generado: tabla_valores.csv")
+
+
+
+import matplotlib.pyplot as plt
+
+# Crear graficas: una por material
+for w, mat in enumerate(materiales):
+
+    plt.figure(figsize=(8,6))
+    
+    # Para cada gas, extraemos las curvas correspondientes al material w
+    for i, gas in enumerate(gases):
+
+        Delta_V_vector = []
+
+        for j, P_D in enumerate(P_D_vector):
+            V_D = (gamma_gases[i] * P_tonk * V_tonk) / (P_D - (1 + alpha) * P_tonk)
+            W_g = (P_D * V_D) / (R_gases[i] * T_D0)
+            W_m = (3/2) * (P_D * V_D * rho_materiales[w]) / sigma_u_materiales[w]
+            W_d = W_g + W_m
+
+            Isp = (E1 + E2) / (m1 + m2)
+            Delta_V = Isp * log((W_d + Mcp + Mf_N2H4) / (W_d + Mcp))
+
+            Delta_V_vector.append(Delta_V)
+
+        # Curva sin puntos → solo línea
+        plt.plot(P_D_vector/1e5, Delta_V_vector, label=gas)
+
+    # Acabado de la gráfica
+    plt.xlabel("Presión de diseño $P_D$ [bar]")
+    plt.ylabel("Incremento de velocidad $\Delta V$ [m/s]")
+    plt.title(f"ΔV vs P_D para material: {mat}")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+
+    plt.savefig(f"grafica_{mat}.png", dpi=300)
+
+plt.show()
+
