@@ -1,4 +1,4 @@
-from numpy import sqrt
+from numpy import sqrt, linspace, zeros
 
 # DATOS GENERALES
 Mcp = 1500
@@ -94,3 +94,62 @@ print("V tonk", V_tonk)
 
 ### APARTADO C)
 alpha = 0.15
+
+T_D0 = 294 
+
+# GASES
+gases = ["H2", "He", "Aire", "CO2", "Ar", "Kr"]
+R_gases = ([4124, 2076.9, 287, 188.9, 208.1, 99.21]) #sacados del manual del overleaf
+gamma_gases = ([1.41, 1.66, 1.40, 1.30, 1.67, 1.67]) #nist chemistry webbook
+
+# MATERIALES
+materiales = ["Al7075T6", "Acero", "Titanio6AL4V"]
+rho_materiales = [2810, 8190, 4506]  # mirar            
+sigma_u_materiales = [0.45e9, 0.54e9, 1e9]       
+
+P_D_min = (1 + alpha) * P_tonk
+
+P_D_max = 28e5 #cambiar
+paso = 6
+P_D_vector = linspace(P_D_min , P_D_max, paso) 
+
+V_D_z = zeros((len(gases), len(materiales), paso)) # Volúmen del depósito
+W_g_z = zeros((len(gases), len(materiales), paso))  # Masa del gas presurizado
+W_m_z = zeros((len(gases), len(materiales), paso))  # Masa del depósito 
+W_d_z = zeros((len(gases), len(materiales), paso)) # Masa total del sitema de presurizado
+
+
+for i, gas in enumerate(gases):
+    print("\n===================================")
+    print(f"          GAS: {gas}")
+    print("===================================\n")
+
+    for j, P_D in enumerate(P_D_vector):
+
+        # Volumen del depósito
+        V_D = (gamma_gases[i] * P_tonk * V_tonk) / (P_D - (1 + alpha) * P_tonk)
+
+        # Masa del gas
+        W_g = (P_D * V_D) / (R_gases[i] * T_D0)
+
+        print(f"\n---- Presión de diseño P_D = {P_D/1e5:.2f} bar ----")
+        print(f"Volumen V_D = {V_D:.6f} m^3")
+        print(f"Masa del gas W_g = {W_g:.6f} kg")
+
+        for w, mat in enumerate(materiales):
+
+            # Masa del depósito
+            W_m = (3/2) * (P_D * V_D * rho_materiales[w]) / sigma_u_materiales[w]
+
+            # Masa total
+            W_d = W_g + W_m
+
+            # Guardar valores
+            V_D_z[i, w, j] = V_D
+            W_g_z[i, w, j] = W_g
+            W_m_z[i, w, j] = W_m
+            W_d_z[i, w, j] = W_d
+
+            print(f"\nMaterial: {mat}")
+            print(f"  Masa del depósito W_m = {W_m:.6f} kg")
+            print(f"  Masa total W_d = {W_d:.6f} kg")
