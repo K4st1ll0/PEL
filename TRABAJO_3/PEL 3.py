@@ -1,4 +1,4 @@
-from numpy import sqrt, linspace, zeros
+from numpy import log, sqrt, linspace, zeros
 
 # DATOS GENERALES
 Mcp = 1500
@@ -111,7 +111,7 @@ P_D_min = (1 + alpha) * P_tonk
 
 P_D_max = 28e5 #cambiar
 paso = 6
-P_D_vector = linspace(P_D_min , P_D_max, paso) 
+P_D_vector = linspace(13e5 , P_D_max, paso) 
 
 V_D_z = zeros((len(gases), len(materiales), paso)) # Volúmen del depósito
 W_g_z = zeros((len(gases), len(materiales), paso))  # Masa del gas presurizado
@@ -150,6 +150,49 @@ for i, gas in enumerate(gases):
             W_m_z[i, w, j] = W_m
             W_d_z[i, w, j] = W_d
 
+            Isp = (E1 + E2) / (m1 + m2)
+            Delta_V = Isp * log((W_d+Mcp+Mf_N2H4)/(W_d+Mcp))
+
             print(f"\nMaterial: {mat}")
             print(f"  Masa del depósito W_m = {W_m:.6f} kg")
             print(f"  Masa total W_d = {W_d:.6f} kg")
+            print(f"  Delta V = {Delta_V:.6f} m/s")
+
+
+import pandas as pd
+
+# Crear tabla con los valores calculados
+rows = []
+
+for i, gas in enumerate(gases):
+    for j, P_D in enumerate(P_D_vector):
+
+        V_D = (gamma_gases[i] * P_tonk * V_tonk) / (P_D - (1 + alpha) * P_tonk)
+        W_g = (P_D * V_D) / (R_gases[i] * T_D0)
+
+        for w, mat in enumerate(materiales):
+
+            W_m = (3/2) * (P_D * V_D * rho_materiales[w]) / sigma_u_materiales[w]
+            W_d = W_g + W_m
+
+            Isp = (E1 + E2) / (m1 + m2)
+            Delta_V = Isp * log((W_d + Mcp + Mf_N2H4) / (W_d + Mcp))
+
+            rows.append({
+                "Gas": gas,
+                "P_D_bar": P_D/1e5,
+                "Material": mat,
+                "V_D_m3": V_D,
+                "W_g_kg": W_g,
+                "W_m_kg": W_m,
+                "W_d_kg": W_d,
+                "DeltaV_m_s": Delta_V
+            })
+
+# Convertir a DataFrame
+df = pd.DataFrame(rows)
+
+# Guardar el CSV SIEMPRE con este nombre
+df.to_csv("tabla_valores.csv", index=False)
+
+print("\nCSV generado: tabla_valores.csv")
