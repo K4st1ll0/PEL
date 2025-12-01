@@ -95,7 +95,7 @@ print("V tonk", V_tonk)
 ### APARTADO C)
 alpha = 0.15
 
-T_D0 = 294 
+T_D0 = 298.15
 
 # GASES
 gases = ["H2", "He", "Aire", "CO2", "Ar"]
@@ -105,7 +105,9 @@ gamma_gases = ([1.41, 1.66, 1.40, 1.30, 1.67]) #nist chemistry webbook
 # MATERIALES
 materiales = ["Al7075T6", "Acero", "Titanio6AL4V"]
 rho_materiales = [2810, 8190, 4506]  # mirar            
-sigma_u_materiales = [0.45e9, 0.54e9, 1e9]       
+sigma_u_materiales = [0.45e9, 0.54e9, 1e9]    
+precios_materiales = [6, 4.5, 30]  # €/kg
+
 
 P_D_min = (1 + alpha) * P_tonk
 
@@ -117,6 +119,7 @@ V_D_z = zeros((len(gases), len(materiales), paso)) # Volúmen del depósito
 W_g_z = zeros((len(gases), len(materiales), paso))  # Masa del gas presurizado
 W_m_z = zeros((len(gases), len(materiales), paso))  # Masa del depósito 
 W_d_z = zeros((len(gases), len(materiales), paso)) # Masa total del sitema de presurizado
+C_z = zeros((len(gases), len(materiales), paso))   # Costo total del sistema de presurizado
 
 
 for i, gas in enumerate(gases):
@@ -149,6 +152,7 @@ for i, gas in enumerate(gases):
             W_g_z[i, w, j] = W_g
             W_m_z[i, w, j] = W_m
             W_d_z[i, w, j] = W_d
+            C_z[i, w, j] = W_d * precios_materiales[w]
 
             Isp = (E1 + E2) / (m1 + m2)
             Delta_V = Isp * log((W_d+Mcp+Mf_N2H4)/(W_d+Mcp))
@@ -157,6 +161,7 @@ for i, gas in enumerate(gases):
             print(f"  Masa del depósito W_m = {W_m:.6f} kg")
             print(f"  Masa total W_d = {W_d:.6f} kg")
             print(f"  Delta V = {Delta_V:.6f} m/s")
+            print(f"  Costo total C = {W_d * precios_materiales[w]:.2f} €")
 
 
 import pandas as pd
@@ -186,7 +191,8 @@ for i, gas in enumerate(gases):
                 "W_g_kg": W_g,
                 "W_m_kg": W_m,
                 "W_d_kg": W_d,
-                "DeltaV_m_s": Delta_V
+                "DeltaV_m_s": Delta_V,
+                "Costo_€": W_d * precios_materiales[w]
             })
 
 # Convertir a DataFrame
@@ -201,39 +207,87 @@ print("\nCSV generado: tabla_valores.csv")
 
 import matplotlib.pyplot as plt
 
-# Crear graficas: una por material
+# Crear gráficas: varias por material
 for w, mat in enumerate(materiales):
 
-    plt.figure(figsize=(8,6))
-    
-    # Para cada gas, extraemos las curvas correspondientes al material w
+    # Diccionarios para guardar las curvas por gas
+    DeltaV_dict = {gas: [] for gas in gases}
+    Coste_dict  = {gas: [] for gas in gases}
+    Wd_dict     = {gas: [] for gas in gases}
+    Vd_dict     = {gas: [] for gas in gases}
+
+    # Primero calculamos todas las magnitudes para cada gas y presión
     for i, gas in enumerate(gases):
 
-        Delta_V_vector = []
-
         for j, P_D in enumerate(P_D_vector):
+            # Volumen del depósito
             V_D = (gamma_gases[i] * P_tonk * V_tonk) / (P_D - (1 + alpha) * P_tonk)
+            # Masa del gas
             W_g = (P_D * V_D) / (R_gases[i] * T_D0)
+            # Masa del depósito (depende del material)
             W_m = (3/2) * (P_D * V_D * rho_materiales[w]) / sigma_u_materiales[w]
+            # Masa total sistema de presurización
             W_d = W_g + W_m
 
+            # ΔV (depende de la masa total del sistema)
             Isp = (E1 + E2) / (m1 + m2)
             Delta_V = Isp * log((W_d + Mcp + Mf_N2H4) / (W_d + Mcp))
 
-            Delta_V_vector.append(Delta_V)
+            # Coste
+            C = W_d * precios_materiales[w]
 
-        # Curva sin puntos → solo línea
-        plt.plot(P_D_vector/1e5, Delta_V_vector, label=gas)
+            # Guardamos en los diccionarios
+            DeltaV_dict[gas].append(Delta_V)
+            Coste_dict[gas].append(C)
+            Wd_dict[gas].append(W_d)
+            Vd_dict[gas].append(V_D)
 
-    # Acabado de la gráfica
-    plt.xlabel("Presión de diseño $P_D$ [bar]")
-    plt.ylabel("Incremento de velocidad $\Delta V$ [m/s]")
-    plt.title(f"ΔV vs P_D para material: {mat}")
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
+    # ========= 1) ΔV vs P_D =========
+    fig1, ax1 = plt.subplots(figsize=(8,6))
+    for gas in gases:
+        ax1.plot(P_D_vector/1e5, DeltaV_dict[gas], label=gas)
+    ax1.set_xlabel("Presión de diseño $P_D$ [bar]")
+    ax1.set_ylabel("Incremento de velocidad $\\Delta V$ [m/s]")
+    ax1.set_title(f"$\\Delta V$ vs $P_D$ para material: {mat}")
+    ax1.grid(True)
+    ax1.legend()
+    fig1.tight_layout()
+    fig1.savefig(f"grafica_dV_{mat}.png", dpi=300)
 
-    plt.savefig(f"grafica_{mat}.png", dpi=300)
+    # ========= 2) Coste vs P_D =========
+    fig2, ax2 = plt.subplots(figsize=(8,6))
+    for gas in gases:
+        ax2.plot(P_D_vector/1e5, Coste_dict[gas], label=gas)
+    ax2.set_xlabel("Presión de diseño $P_D$ [bar]")
+    ax2.set_ylabel("Coste [€]")
+    ax2.set_title(f"Coste vs $P_D$ para material: {mat}")
+    ax2.grid(True)
+    ax2.legend()
+    fig2.tight_layout()
+    fig2.savefig(f"grafica_coste_{mat}.png", dpi=300)
+
+    # ========= 3) Masa total W_d vs P_D =========
+    fig3, ax3 = plt.subplots(figsize=(8,6))
+    for gas in gases:
+        ax3.plot(P_D_vector/1e5, Wd_dict[gas], label=gas)
+    ax3.set_xlabel("Presión de diseño $P_D$ [bar]")
+    ax3.set_ylabel("Masa total $W_d$ [kg]")
+    ax3.set_title(f"Masa total del sistema vs $P_D$ para material: {mat}")
+    ax3.grid(True)
+    ax3.legend()
+    fig3.tight_layout()
+    fig3.savefig(f"grafica_masa_{mat}.png", dpi=300)
+
+    # ========= 4) Volumen V_D vs P_D =========
+    fig4, ax4 = plt.subplots(figsize=(8,6))
+    for gas in gases:
+        ax4.plot(P_D_vector/1e5, Vd_dict[gas], label=gas)
+    ax4.set_xlabel("Presión de diseño $P_D$ [bar]")
+    ax4.set_ylabel("Volumen del depósito $V_D$ [$m^3$]")
+    ax4.set_title(f"Volumen del depósito vs $P_D$ para material: {mat}")
+    ax4.grid(True)
+    ax4.legend()
+    fig4.tight_layout()
+    fig4.savefig(f"grafica_volumen_{mat}.png", dpi=300)
 
 plt.show()
-
